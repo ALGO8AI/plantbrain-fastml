@@ -14,16 +14,12 @@ setup(
         "Source": "https://github.com/ALGO8AI/plantbrain-fastml.git"
     },
     packages=find_packages(),
-    python_requires=">=3.8",
+    python_requires=">=3.13.0",
     install_requires=[
-        "scikit-learn>=1.1",
-        "pandas>=1.3",
-        "numpy>=1.21",
-        "xgboost>=1.6",
-        "lightgbm>=3.3",
-        "statsmodels>=0.13",
-        "matplotlib>=3.5",
-        "joblib>=1.2"
+        "scikit-learn>=1.6.1",
+        "pandas>=2.2.3",
+        "numpy>=2.1.3",
+        "optuna>=4.1.0",
     ],
     license="MIT",
     classifiers=[
