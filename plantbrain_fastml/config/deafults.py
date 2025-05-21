@@ -10,6 +10,11 @@ default_regressor_params = {
         "max_depth": 10,
         "min_samples_split": 2,
         "min_samples_leaf": 1,
+    },
+    "decision_tree": {
+        "max_depth": 10,
+        "min_samples_split": 2,
+        "min_samples_leaf": 1,
     }
 }
 
