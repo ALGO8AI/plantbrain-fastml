@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="plantbrain-fastml",
-    version="0.1.0",
+    version="0.2.0",
     author="Himanshu Bhansali, Himanshu Ranjan",
     author_email="Himanshu.ranjan@algo8.ai, himanshu.bhansali@algo8.ai",
     description="An AutoML package by plantBrain with classification, regression, and forecasting support.",
@@ -14,7 +14,7 @@ setup(
         "Source": "https://github.com/ALGO8AI/plantbrain-fastml.git"
     },
     packages=find_packages(),
-    python_requires=">=3.13.0",
+    python_requires=">=3.11.0",
     install_requires=[
         "scikit-learn>=1.6.1",
         "pandas>=2.2.3",
