@@ -1,300 +1,46 @@
 # plantbrain_fastml/base/base_regressor.py
-
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
-import numpy as np
 import pandas as pd
-from sklearn.linear_model import LassoCV
-from sklearn.feature_selection import SelectFromModel
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.decomposition import PCA
-from sklearn.model_selection import cross_validate, train_test_split
-from plantbrain_fastml.utils.preprocessing import default_preprocessor
-from plantbrain_fastml.utils.metrics import regression_metrics
+import numpy as np
+from sklearn.model_selection import train_test_split, KFold
+import matplotlib.pyplot as plt
 import optuna
-
+from plantbrain_fastml.base.base_preprocessor import BasePreprocessor
+from plantbrain_fastml.utils.metrics import regression_metrics
 
 class BaseRegressor(ABC):
     """
-    Abstract base class for regressors with built-in feature elimination,
-    dimensionality reduction (PCA), CV or train/test evaluation, and hypertuning support.
-
-    Feature elimination methods supported:
-      - 'lasso': Lasso based selection
-      - 'tree': Tree-based feature importance (Decision Tree or Random Forest)
-      - 'correlation': Correlation based selection of top N features
-      - None: no feature elimination
-
-    Dimensionality reduction:
-      - PCA only (optional)
-
-    Evaluation supports:
-      - cross-validation (cv_folds > 1)
-      - train-test split (cv_folds = 1)
+    Abstract base class for regression models with:
+    - Preprocessing: cleaning, feature elimination, PCA (via BasePreprocessor)
+    - Cross-validation training on train split + test set evaluation
+    - Internal hyperparameter tuning support with Optuna in evaluate()
+    - Test set plots (line and scatter)
     """
 
     def __init__(self, **params):
-        """
-        Initialize the base regressor.
-
-        Parameters:
-        -----------
-        params : dict
-            Model-specific parameters.
-        """
         self.params = params
         self.model = None
-        self.preprocessor = default_preprocessor()
-        self.selected_features = None  # Stores columns selected after feature elimination
-        self.pca_model = None          # PCA model if applied
+        self.preprocessor = BasePreprocessor()
+        self.cv_results = None
+        self.test_results = None
 
     @abstractmethod
-    def train(self, X: pd.DataFrame, y: Union[pd.Series, np.ndarray]) -> None:
-        """
-        Train the model on training data X, y.
-        Must be implemented by subclasses.
-
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Training features.
-        y : array-like
-            Training target.
-        """
+    def train(self, X: pd.DataFrame, y: pd.Series) -> None:
         pass
 
     @abstractmethod
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """
-        Predict target values for input features X.
-        Must be implemented by subclasses.
-
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Input features.
-
-        Returns:
-        --------
-        np.ndarray
-            Predicted values.
-        """
         pass
 
-    def _feature_elimination(self,
-                             X: pd.DataFrame,
-                             y: Union[pd.Series, np.ndarray],
-                             method: Optional[str],
-                             n_features: Optional[int]) -> pd.DataFrame:
-        """
-        Perform feature elimination on X.
+    @abstractmethod
+    def search_space(self, trial: optuna.Trial) -> Dict[str, Any]:
+        pass
 
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Input features.
-        y : array-like
-            Target values.
-        method : str or None
-            Feature elimination method: 'lasso', 'tree', 'correlation', or None.
-        n_features : int or None
-            Number of features to select. If None, select all features.
-
-        Returns:
-        --------
-        pd.DataFrame
-            DataFrame with selected features only.
-        """
-        if method is None:
-            self.selected_features = X.columns.tolist()
-            return X
-
-        if method == 'lasso':
-            # Use LassoCV for feature selection
-            lasso = LassoCV(cv=5, random_state=42, n_jobs=-1).fit(X, y)
-            selector = SelectFromModel(lasso, prefit=True, max_features=n_features)
-            mask = selector.get_support()
-            features_selected = X.columns[mask]
-            if n_features is not None and len(features_selected) > n_features:
-                # Select top n_features by absolute coefficient magnitude
-                coef_abs = np.abs(lasso.coef_[mask])
-                top_idx = np.argsort(coef_abs)[-n_features:]
-                features_selected = features_selected[top_idx]
-            self.selected_features = list(features_selected)
-            return X[self.selected_features]
-
-        elif method == 'tree':
-            # Use RandomForestRegressor for feature importance
-            tree_model = RandomForestRegressor(random_state=42, n_jobs=-1)
-            tree_model.fit(X, y)
-            importances = tree_model.feature_importances_
-            indices = np.argsort(importances)[::-1]
-            if n_features is not None:
-                indices = indices[:n_features]
-            features_selected = X.columns[indices]
-            self.selected_features = list(features_selected)
-            return X[self.selected_features]
-
-        elif method == 'correlation':
-            # Select top n_features by absolute correlation with target
-            corrs = X.apply(lambda col: np.abs(np.corrcoef(col, y)[0, 1]))
-            corrs = corrs.fillna(0)
-            selected = corrs.sort_values(ascending=False)
-            if n_features is not None:
-                selected = selected.iloc[:n_features]
-            self.selected_features = list(selected.index)
-            return X[self.selected_features]
-
-        else:
-            raise ValueError(f"Unknown feature elimination method: {method}")
-
-    def _dimensionality_reduction(self,
-                                  X: pd.DataFrame,
-                                  n_components: Optional[int]) -> pd.DataFrame:
-        """
-        Perform PCA on features X.
-
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Input features (after feature elimination).
-        n_components : int or None
-            Number of PCA components to keep. If None or >= n_features, no PCA is applied.
-
-        Returns:
-        --------
-        pd.DataFrame
-            Transformed features after PCA or original if not applied.
-        """
-        if n_components is None or n_components >= X.shape[1]:
-            self.pca_model = None
-            return X
-
-        self.pca_model = PCA(n_components=n_components, random_state=42)
-        X_reduced = self.pca_model.fit_transform(X)
-        columns = [f'pca_{i + 1}' for i in range(X_reduced.shape[1])]
-        return pd.DataFrame(X_reduced, columns=columns, index=X.index)
-
-    def _preprocess(self,
-                    X: pd.DataFrame,
-                    y: Optional[Union[pd.Series, np.ndarray]] = None,
-                    feature_elimination: bool = False,
-                    fe_method: Optional[str] = None,
-                    fe_n_features: Optional[int] = None,
-                    pca: bool = False,
-                    pca_n_components: Optional[int] = None,
-                    fit: bool = True) -> pd.DataFrame:
-        """
-        Full preprocessing pipeline: preprocessing, feature elimination, PCA.
-
-        Parameters:
-        -----------
-        X : pd.DataFrame or np.ndarray
-            Input features.
-        y : array-like or None
-            Target variable (required if feature elimination is True).
-        feature_elimination : bool
-            Whether to apply feature elimination.
-        fe_method : str or None
-            Feature elimination method ('lasso', 'tree', 'correlation').
-        fe_n_features : int or None
-            Number of features to select in feature elimination.
-        pca : bool
-            Whether to apply PCA.
-        pca_n_components : int or None
-            Number of PCA components.
-        fit : bool
-            If True, fit preprocessors; else transform only.
-
-        Returns:
-        --------
-        pd.DataFrame
-            Preprocessed feature dataframe.
-        """
-        if fit:
-            X_processed = self.preprocessor.fit_transform(X)
-        else:
-            X_processed = self.preprocessor.transform(X)
-
-        # Convert to DataFrame for feature selection
-        if not isinstance(X_processed, pd.DataFrame):
-            idx = getattr(X, 'index', None)
-            cols = getattr(X, 'columns', None)
-            X_processed = pd.DataFrame(X_processed, index=idx, columns=cols)
-
-        if feature_elimination and y is not None:
-            X_processed = self._feature_elimination(X_processed, y, fe_method, fe_n_features)
-        elif not feature_elimination:
-            # Reset selected features if no FE
-            self.selected_features = X_processed.columns.tolist()
-
-        if pca:
-            X_processed = self._dimensionality_reduction(X_processed, pca_n_components)
-        else:
-            self.pca_model = None
-
-        return X_processed
-
-    def train(self,
-              X: pd.DataFrame,
-              y: Union[pd.Series, np.ndarray],
-              feature_elimination: bool = False,
-              fe_method: Optional[str] = None,
-              fe_n_features: Optional[int] = None,
-              pca: bool = False,
-              pca_n_components: Optional[int] = None) -> None:
-        """
-        Train the model with optional feature elimination and PCA.
-
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Training features.
-        y : array-like
-            Training targets.
-        feature_elimination : bool
-            Whether to perform feature elimination.
-        fe_method : str or None
-            Feature elimination method ('lasso', 'tree', 'correlation').
-        fe_n_features : int or None
-            Number of features to select.
-        pca : bool
-            Whether to apply PCA.
-        pca_n_components : int or None
-            Number of PCA components.
-        """
-        X_processed = self._preprocess(X, y, feature_elimination, fe_method, fe_n_features, pca, pca_n_components, fit=True)
-        self.model.fit(X_processed, y)
-
-    def predict(self,
-                X: pd.DataFrame) -> np.ndarray:
-        """
-        Predict using the trained model.
-
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Input features.
-
-        Returns:
-        --------
-        np.ndarray
-            Predicted values.
-        """
-        X_processed = self.preprocessor.transform(X)
-
-        # Apply feature selection if done
-        if self.selected_features is not None:
-            X_processed = pd.DataFrame(X_processed, index=X.index, columns=X.columns if hasattr(X, 'columns') else None)
-            # Select the features used for training
-            X_processed = X_processed[self.selected_features]
-
-        # Apply PCA if done
-        if self.pca_model is not None:
-            X_processed = self.pca_model.transform(X_processed)
-
-        return self.model.predict(X_processed)
+    def set_params(self, **params):
+        self.params.update(params)
+        if self.model is not None:
+            self.model.set_params(**params)
 
     def evaluate(self,
                  X: pd.DataFrame,
@@ -302,218 +48,136 @@ class BaseRegressor(ABC):
                  metrics: Optional[Dict[str, Any]] = None,
                  cv_folds: int = 5,
                  test_size: float = 0.2,
-                 random_state: int = 42,
+                 test_split_type: str = 'random',
                  feature_elimination: bool = False,
                  fe_method: Optional[str] = None,
                  fe_n_features: Optional[int] = None,
                  pca: bool = False,
                  pca_n_components: Optional[int] = None,
-                 return_cv_scores: bool = False) -> Union[Dict[str, float], pd.DataFrame]:
+                 hypertune: bool = False,
+                 hypertune_params: Optional[Dict[str, Any]] = None,
+                 return_plots: bool = True,
+                 random_state: int = 42
+                 ) -> Dict[str, Any]:
         """
-        Evaluate model performance via cross-validation or train/test split.
+        Evaluate the model with optional hypertuning inside.
+        Performs train-test split, CV on train split, and test evaluation.
 
         Parameters:
-        -----------
-        X : pd.DataFrame
-            Input features.
-        y : array-like
-            Target values.
-        metrics : dict or None
-            Metrics dictionary, keys are metric names, values are functions(y_true, y_pred).
-            Defaults to regression_metrics.
-        cv_folds : int
-            Number of CV folds. If 1, use train-test split.
-        test_size : float
-            Proportion of test data if train-test split is used.
-        random_state : int
-            Random seed for reproducibility.
-        feature_elimination : bool
-            Whether to apply feature elimination during training.
-        fe_method : str or None
-            Feature elimination method.
-        fe_n_features : int or None
-            Number of features for feature elimination.
-        pca : bool
-            Whether to apply PCA.
-        pca_n_components : int or None
-            Number of PCA components.
-        return_cv_scores : bool
-            If True and cv_folds>1, return detailed CV scores dataframe.
-
-        Returns:
-        --------
-        Dict[str, float] or pd.DataFrame
-            Dictionary of averaged metric scores or detailed CV scores DataFrame if return_cv_scores=True.
+        - hypertune (bool): If True, perform hyperparameter tuning before training.
+        - hypertune_params (dict): Passed to hypertune method.
         """
+
         if metrics is None:
             metrics = regression_metrics
 
-        if cv_folds > 1:
-            # Cross-validation evaluation
-            scoring = {name: 'neg_root_mean_squared_error' if name == 'rmse' else
-                             'r2' if name == 'r2' else
-                             'neg_mean_absolute_error' if name == 'mae' else None
-                       for name in metrics.keys()}
-            # Adjust for sklearn naming and negative metrics
-            # cross_validate expects scoring keys from sklearn or callables - so we define mapping here:
-            scoring_map = {}
-            for name in metrics.keys():
-                if name == 'rmse':
-                    # sklearn has neg_root_mean_squared_error only since v0.22; if not available fallback to neg_mean_squared_error
-                    scoring_map[name] = 'neg_root_mean_squared_error'
-                elif name == 'r2':
-                    scoring_map[name] = 'r2'
-                elif name == 'mae':
-                    scoring_map[name] = 'neg_mean_absolute_error'
-                else:
-                    scoring_map[name] = None  # unsupported
+        hypertune_params = hypertune_params or {}
 
-            # Prepare a wrapper estimator with preprocessing integrated
-            def pipeline_fit(X_cv, y_cv):
-                self.train(X_cv, y_cv, feature_elimination, fe_method, fe_n_features, pca, pca_n_components)
-
-            def pipeline_predict(X_cv):
-                return self.predict(X_cv)
-
-            # Use cross_validate with custom scoring functions
-            cv_results = cross_validate(self.model, X, y, cv=cv_folds, scoring=scoring_map, n_jobs=-1,
-                                         return_train_score=False)
-
-            # Calculate metrics manually since cross_validate returns negative metrics for some scores
-            scores = {}
-            for metric_name in metrics.keys():
-                key = f'test_{metric_name}'
-                if metric_name == 'rmse':
-                    # sklearn neg_root_mean_squared_error is negative, so convert back
-                    scores[metric_name] = -np.mean(cv_results[f'test_rmse'])
-                elif metric_name == 'mae':
-                    scores[metric_name] = -np.mean(cv_results[f'test_mae'])
-                elif metric_name == 'r2':
-                    scores[metric_name] = np.mean(cv_results[f'test_r2'])
-                else:
-                    scores[metric_name] = np.nan
-
-            if return_cv_scores:
-                # Provide full cv results as DataFrame
-                df = pd.DataFrame({k: -v if k.startswith('test_rmse') or k.startswith('test_mae') else v for k, v in cv_results.items()})
-                return df
-
-            return scores
-
+        # Step 1: Split data
+        if test_split_type == 'random':
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, shuffle=True, random_state=random_state)
+        elif test_split_type == 'ordered':
+            split_idx = int(len(X) * (1 - test_size))
+            X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+            y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
         else:
-            # Train-test split evaluation
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
-            self.train(X_train, y_train, feature_elimination, fe_method, fe_n_features, pca, pca_n_components)
-            y_pred = self.predict(X_test)
-            scores = {name: fn(y_test, y_pred) for name, fn in metrics.items()}
-            return scores
+            raise ValueError("test_split_type must be 'random' or 'ordered'")
 
-    def hypertune(self,
-                  X: pd.DataFrame,
-                  y: Union[pd.Series, np.ndarray],
-                  n_trials: int = 20,
-                  timeout: Optional[int] = None,
-                  metric: str = 'rmse',
-                  direction: str = 'minimize',
-                  feature_elimination: bool = False,
-                  fe_method: Optional[str] = None,
-                  fe_n_features: Optional[int] = None,
-                  pca: bool = False,
-                  pca_n_components: Optional[int] = None,
-                  cv_folds: int = 5,
-                  test_size: float = 0.2,
-                  random_state: int = 42) -> Dict[str, Any]:
-        """
-        Perform hyperparameter tuning using Optuna.
+        # Step 2: Initialize preprocessor and fit on training data
+        self.preprocessor = BasePreprocessor(
+            feature_elimination=feature_elimination,
+            fe_method=fe_method,
+            fe_n_features=fe_n_features,
+            pca=pca,
+            pca_n_components=pca_n_components)
 
-        Parameters:
-        -----------
-        X : pd.DataFrame
-            Input features.
-        y : array-like
-            Target variable.
-        n_trials : int
-            Number of trials for Optuna.
-        timeout : int or None
-            Timeout in seconds for Optuna study.
-        metric : str
-            Metric to optimize, key from regression_metrics.
-        direction : str
-            'minimize' or 'maximize'.
-        feature_elimination : bool
-            Whether to apply feature elimination during tuning.
-        fe_method : str or None
-            Feature elimination method.
-        fe_n_features : int or None
-            Number of features for feature elimination.
-        pca : bool
-            Whether to apply PCA during tuning.
-        pca_n_components : int or None
-            Number of PCA components.
-        cv_folds : int
-            Number of CV folds for evaluation during tuning.
-        test_size : float
-            Test size if using train-test split.
-        random_state : int
-            Random seed.
+        X_train_proc, y_train_proc = self.preprocessor.fit_transform(X_train, y_train)
 
-        Returns:
-        --------
-        Dict[str, Any]
-            Best parameters found by Optuna.
-        """
-        def objective(trial: optuna.Trial) -> float:
-            # Get suggested params from child class
-            trial_params = self.search_space(trial)
-            self.set_params(**trial_params)
+        # Step 3: Optional hypertuning on training split
+        if hypertune:
+            def objective(trial: optuna.Trial) -> float:
+                trial_params = self.search_space(trial)
+                self.set_params(**trial_params)
+                # Evaluate CV score on training split only (no test)
+                cv = KFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
+                cv_scores = []
+                for train_idx, val_idx in cv.split(X_train_proc):
+                    X_cv_train, X_cv_val = X_train_proc.iloc[train_idx], X_train_proc.iloc[val_idx]
+                    y_cv_train, y_cv_val = y_train_proc.iloc[train_idx], y_train_proc.iloc[val_idx]
+                    self.train(X_cv_train, y_cv_train)
+                    y_pred_val = self.predict(X_cv_val)
+                    score = metrics.get('rmse', lambda yt, yp: 0)(y_cv_val, y_pred_val)  # default RMSE if available
+                    cv_scores.append(score)
+                return np.mean(cv_scores)
 
-            # Train and evaluate using CV
-            evals = self.evaluate(X, y, metrics=regression_metrics,
-                                  cv_folds=cv_folds,
-                                  test_size=test_size,
-                                  feature_elimination=feature_elimination,
-                                  fe_method=fe_method,
-                                  fe_n_features=fe_n_features,
-                                  pca=pca,
-                                  pca_n_components=pca_n_components,
-                                  return_cv_scores=False)
+            # Suppress Optuna logs for clean output
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-            return evals[metric]
+            study = optuna.create_study(direction='minimize')
+            study.optimize(objective, n_trials=hypertune_params.get('n_trials', 20),
+                           timeout=hypertune_params.get('timeout', None))
+            self.set_params(**study.best_params)
 
-        study = optuna.create_study(direction=direction)
-        study.optimize(objective, n_trials=n_trials, timeout=timeout)
+        # Step 4: CV on training split with chosen params
+        cv = KFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
+        cv_scores = {name: [] for name in metrics.keys()}
+        for train_idx, val_idx in cv.split(X_train_proc):
+            X_cv_train, X_cv_val = X_train_proc.iloc[train_idx], X_train_proc.iloc[val_idx]
+            y_cv_train, y_cv_val = y_train_proc.iloc[train_idx], y_train_proc.iloc[val_idx]
+            self.train(X_cv_train, y_cv_train)
+            y_pred_val = self.predict(X_cv_val)
+            for name, metric_fn in metrics.items():
+                score = metric_fn(y_cv_val, y_pred_val)
+                cv_scores[name].append(score)
+        cv_scores_summary = {name: (np.mean(scores), np.std(scores)) for name, scores in cv_scores.items()}
 
-        self.set_params(**study.best_params)
-        self.train(X, y, feature_elimination, fe_method, fe_n_features, pca, pca_n_components)
+        # Step 5: Preprocess and evaluate on test split
+        X_test_proc = self.preprocessor.transform(X_test)
+        y_test_clean = y_test.dropna()
+        common_idx = X_test_proc.index.intersection(y_test_clean.index)
+        X_test_proc = X_test_proc.loc[common_idx]
+        y_test_clean = y_test_clean.loc[common_idx]
 
-        return study.best_params
+        self.train(X_train_proc, y_train_proc)
+        y_pred_test = self.predict(X_test_proc)
 
-    def set_params(self, **params):
-        """
-        Update model parameters.
+        test_scores = {name: fn(y_test_clean, y_pred_test) for name, fn in metrics.items()}
 
-        Parameters:
-        -----------
-        params : dict
-            Parameters to update.
-        """
-        self.params.update(params)
-        if self.model is not None:
-            self.model.set_params(**params)
+        # Step 6: Generate plots
+        plots = {}
+        if return_plots:
+            plots['line'] = self._plot_line(y_test_clean, y_pred_test)
+            plots['scatter'] = self._plot_scatter(y_test_clean, y_pred_test)
+            self.latest_plots = plots
 
-    @abstractmethod
-    def search_space(self, trial: optuna.Trial) -> Dict[str, Any]:
-        """
-        Define hyperparameter search space for Optuna.
+        self.cv_results = cv_scores_summary
+        self.test_results = test_scores
+        
 
-        Parameters:
-        -----------
-        trial : optuna.Trial
-            Trial object to suggest parameters.
+        return {
+            'cv_scores': cv_scores_summary,
+            'test_scores': test_scores,
+            'plots': plots
+        }
 
-        Returns:
-        --------
-        dict
-            Dictionary of parameters for the model.
-        """
-        pass
+    def _plot_line(self, y_true: pd.Series, y_pred: np.ndarray):
+        fig, ax = plt.subplots()
+        ax.plot(y_true.index, y_true.values, label='True')
+        ax.plot(y_true.index, y_pred, label='Predicted')
+        ax.set_title("Line Plot: True vs Predicted")
+        ax.legend()
+        plt.close(fig)
+        return fig
+
+    def _plot_scatter(self, y_true: pd.Series, y_pred: np.ndarray):
+        fig, ax = plt.subplots()
+        ax.scatter(y_true, y_pred, alpha=0.5)
+        min_val = min(y_true.min(), y_pred.min())
+        max_val = max(y_true.max(), y_pred.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--')
+        ax.set_xlabel("True Values")
+        ax.set_ylabel("Predicted Values")
+        ax.set_title("Scatter Plot: True vs Predicted")
+        plt.close(fig)
+        return fig
