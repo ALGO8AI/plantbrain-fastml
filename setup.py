@@ -20,7 +20,7 @@ setup(
         "pandas>=2.2.3",
         "numpy>=2.1.3",
         "optuna>=4.1.0",
-        "matplotlib>=3.7.1"
+        "matplotlib>=3.10.0"
     ],
     license="MIT",
     classifiers=[
