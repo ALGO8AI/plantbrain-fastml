@@ -1,12 +1,12 @@
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import GradientBoostingRegressor
 from plantbrain_fastml.base.base_regressor import BaseRegressor
 from optuna import Trial
 import pandas as pd
 
-class DecisionTreeRegressorWrapper(BaseRegressor):
+class GradientBoostingRegressorWrapper(BaseRegressor):
     def __init__(self, **params):
         super().__init__(**params)
-        self.model = DecisionTreeRegressor(**params)
+        self.model = GradientBoostingRegressor(**params)
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> None:
         self.model.fit(X, y)
@@ -17,9 +17,11 @@ class DecisionTreeRegressorWrapper(BaseRegressor):
 
     def search_space(self, trial: Trial) -> dict:
         return {
-            "max_depth": trial.suggest_int("max_depth", 3, 30),
+            "n_estimators": trial.suggest_int("n_estimators", 50, 300),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
+            "max_depth": trial.suggest_int("max_depth", 3, 15),
             "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
             "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 10),
-            # "max_features": trial.suggest_categorical("max_features", [None, "auto", "sqrt", "log2"]),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
             "random_state": 42,
         }
