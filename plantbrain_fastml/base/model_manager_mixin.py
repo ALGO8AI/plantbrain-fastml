@@ -3,7 +3,43 @@ import pandas as pd
 from typing import Dict, Any, Optional
 import optuna
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
+
+
+def _eval_model(name_model,
+                X,
+                y,
+                metrics,
+                cv_folds,
+                test_size,
+                test_split_type,
+                feature_elimination,
+                fe_method,
+                fe_n_features,
+                pca,
+                pca_n_components,
+                return_plots,
+                hypertune,
+                hypertune_params):
+    name, model = name_model
+    eval_result = model.evaluate(
+        X, y,
+        metrics=metrics,
+        cv_folds=cv_folds,
+        test_size=test_size,
+        test_split_type=test_split_type,
+        feature_elimination=feature_elimination,
+        fe_method=fe_method,
+        fe_n_features=fe_n_features,
+        pca=pca,
+        pca_n_components=pca_n_components,
+        return_plots=return_plots,
+        hypertune=hypertune,
+        hypertune_params=hypertune_params
+    )
+    return name, eval_result
+
 
 class ModelManagerMixin:
     """
@@ -11,7 +47,7 @@ class ModelManagerMixin:
 
     - train_all: just calls model.train (no hypertuning)
     - evaluate_all: calls model.evaluate (includes preprocessing, hypertuning, CV, test split)
-    - Supports parallel evaluation with n_jobs
+    - Supports parallel evaluation with n_jobs using ProcessPoolExecutor for CPU-bound tasks
     """
 
     def __init__(self):
@@ -24,9 +60,7 @@ class ModelManagerMixin:
         """Add a model instance with unique name."""
         self.models[name] = model
 
-    def train_all(self,
-                  X,
-                  y):
+    def train_all(self, X, y):
         """Simple training on all models, no hypertuning or preprocessing."""
         for name, model in self.models.items():
             model.train(X, y)
@@ -70,10 +104,33 @@ class ModelManagerMixin:
         self.cv_results = {}
         self.test_results = {}
 
-        def eval_model(name_model):
-            name, model = name_model
-            eval_result = model.evaluate(
-                X, y,
+        if n_jobs == 1:
+            # Sequential evaluation
+            for name_model in self.models.items():
+                name, eval_result = _eval_model(
+                    name_model,
+                    X,
+                    y,
+                    metrics,
+                    cv_folds,
+                    test_size,
+                    test_split_type,
+                    feature_elimination,
+                    fe_method,
+                    fe_n_features,
+                    pca,
+                    pca_n_components,
+                    return_plots,
+                    hypertune,
+                    hypertune_params,
+                )
+                results_list.append((name, eval_result))
+        else:
+            # Parallel evaluation using ProcessPoolExecutor for CPU-bound work
+            func = partial(
+                _eval_model,
+                X=X,
+                y=y,
                 metrics=metrics,
                 cv_folds=cv_folds,
                 test_size=test_size,
@@ -85,20 +142,10 @@ class ModelManagerMixin:
                 pca_n_components=pca_n_components,
                 return_plots=return_plots,
                 hypertune=hypertune,
-                hypertune_params=hypertune_params
+                hypertune_params=hypertune_params,
             )
-            # Save plots to model attribute for retrieval
-            # if return_plots:
-            #     setattr(model, 'latest_plots', eval_result.get('plots', {}))
-            return name, eval_result
-
-        if n_jobs == 1:
-            for name_model in self.models.items():
-                name, eval_result = eval_model(name_model)
-                results_list.append((name, eval_result))
-        else:
-            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-                futures = {executor.submit(eval_model, nm): nm[0] for nm in self.models.items()}
+            with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+                futures = {executor.submit(func, nm): nm[0] for nm in self.models.items()}
                 for future in as_completed(futures):
                     name = futures[future]
                     try:
