@@ -7,22 +7,27 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 
 
-def _eval_model(name_model,
-                X,
-                y,
-                metrics,
-                cv_folds,
-                test_size,
-                test_split_type,
-                feature_elimination,
-                fe_method,
-                fe_n_features,
-                pca,
-                pca_n_components,
-                return_plots,
-                hypertune,
-                hypertune_params):
-    name, model = name_model
+def _eval_single_model(name: str,
+                       model,
+                       X,
+                       y,
+                       metrics,
+                       cv_folds,
+                       test_size,
+                       test_split_type,
+                       feature_elimination,
+                       fe_method,
+                       fe_n_features,
+                       pca,
+                       pca_n_components,
+                       return_plots,
+                       hypertune,
+                       hypertune_params):
+    """
+    Evaluate a single model on given data with options.
+
+    Runs model.evaluate(...) and returns results.
+    """
     eval_result = model.evaluate(
         X, y,
         metrics=metrics,
@@ -106,9 +111,10 @@ class ModelManagerMixin:
 
         if n_jobs == 1:
             # Sequential evaluation
-            for name_model in self.models.items():
-                name, eval_result = _eval_model(
-                    name_model,
+            for name, model in self.models.items():
+                name, eval_result = _eval_single_model(
+                    name,
+                    model,
                     X,
                     y,
                     metrics,
@@ -128,7 +134,7 @@ class ModelManagerMixin:
         else:
             # Parallel evaluation using ProcessPoolExecutor for CPU-bound work
             func = partial(
-                _eval_model,
+                _eval_single_model,
                 X=X,
                 y=y,
                 metrics=metrics,
@@ -144,8 +150,9 @@ class ModelManagerMixin:
                 hypertune=hypertune,
                 hypertune_params=hypertune_params,
             )
+
             with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-                futures = {executor.submit(func, nm): nm[0] for nm in self.models.items()}
+                futures = {executor.submit(func, name, model): name for name, model in self.models.items()}
                 for future in as_completed(futures):
                     name = futures[future]
                     try:
