@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="plantbrain-fastml",
-    version="0.4.2",
+    version="0.4.3",
     author="Himanshu Bhansali, Himanshu Ranjan",
     author_email="Himanshu.ranjan@algo8.ai, himanshu.bhansali@algo8.ai",
     description="An AutoML package by plantBrain with classification, regression, and forecasting support.",
