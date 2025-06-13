@@ -5,6 +5,7 @@ import optuna
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
+from utils.helpers import get_effective_n_jobs
 
 
 def _eval_single_model(name: str,
@@ -108,7 +109,7 @@ class ModelManagerMixin:
         results_list = []
         self.cv_results = {}
         self.test_results = {}
-
+        n_jobs=get_effective_n_jobs(n_jobs)
         if n_jobs == 1:
             # Sequential evaluation
             for name, model in self.models.items():
