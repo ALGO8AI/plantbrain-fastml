@@ -5,7 +5,7 @@ import optuna
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
-from utils.helpers import get_effective_n_jobs
+from plantbrain_fastml.utils.helpers import get_effective_n_jobs
 
 
 def _eval_single_model(name: str,
