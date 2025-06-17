@@ -5,7 +5,7 @@ import optuna
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
-from utils.helpers import get_effective_n_jobs
+from plantbrain_fastml.utils.helpers import get_effective_n_jobs
 
 
 def _eval_single_model(name: str,
@@ -23,7 +23,7 @@ def _eval_single_model(name: str,
                        pca_n_components,
                        return_plots,
                        hypertune,
-                       hypertune_params):
+                       hypertune_params,hypertune_metrics):
     """
     Evaluate a single model on given data with options.
 
@@ -42,7 +42,8 @@ def _eval_single_model(name: str,
         pca_n_components=pca_n_components,
         return_plots=return_plots,
         hypertune=hypertune,
-        hypertune_params=hypertune_params
+        hypertune_params=hypertune_params,
+        hypertune_metrics=hypertune_metrics
     )
     return name, eval_result
 
@@ -85,6 +86,7 @@ class ModelManagerMixin:
                      pca_n_components: Optional[int] = None,
                      hypertune: bool = False,
                      hypertune_params: Optional[Dict[str, Any]] = None,
+                     hypertune_metrics: str = "rmse",
                      return_plots: bool = True,
                      n_jobs: int = 1) -> pd.DataFrame:
         """
@@ -130,6 +132,7 @@ class ModelManagerMixin:
                     return_plots,
                     hypertune,
                     hypertune_params,
+                    hypertune_metrics
                 )
                 results_list.append((name, eval_result))
         else:
@@ -150,6 +153,7 @@ class ModelManagerMixin:
                 return_plots=return_plots,
                 hypertune=hypertune,
                 hypertune_params=hypertune_params,
+                hypertune_metrics=hypertune_metrics
             )
 
             with ProcessPoolExecutor(max_workers=n_jobs) as executor:

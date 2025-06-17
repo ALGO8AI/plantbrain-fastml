@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score,precision_score, recall_score,f1_score,roc_auc_score
 
 # Regression metrics dictionary
 regression_metrics = {
@@ -15,6 +15,8 @@ classification_metrics = {
     "precision": precision_score,
     "recall": recall_score,
     "f1": f1_score,
+    "roc_auc":roc_auc_score,
+
 }
 
 # Forecasting metrics (reuse regression metrics)
