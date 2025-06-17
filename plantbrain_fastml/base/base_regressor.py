@@ -161,12 +161,13 @@ class BaseRegressor(ABC):
 
         self.cv_results = cv_scores_summary
         self.test_results = test_scores
-        
+        tuned_params= study.best_params if hypertune and 'study' in locals() else {}
 
         return {
             'cv_scores': cv_scores_summary,
             'test_scores': test_scores,
-            'plots': plots
+            'plots': plots,
+            'tuned_params':tuned_params
         }
 
     def _plot_line(self, y_true: pd.Series, y_pred: np.ndarray):

@@ -158,5 +158,6 @@ class BaseClassifier(ABC):
         self.class_report = classification_report(y_test, y_pred_test, output_dict=True)
         # Note: Plots are not implemented in this version but can be added
         self.latest_plots = {}
+        tuned_hyper_parameters= study.best_params if hypertune and 'study' in locals() else {}
 
-        return {'cv_scores': cv_scores_summary, 'test_scores': test_scores, 'plots': self.latest_plots}
+        return {'cv_scores': cv_scores_summary, 'test_scores': test_scores, 'plots': self.latest_plots,'tuned_params':tuned_hyper_parameters}

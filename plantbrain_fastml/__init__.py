@@ -9,5 +9,5 @@ from .managers.forecaster_manager import ForecasterManager
 from .models.regressors.linear_regression import LinearRegressionRegressor
 from .models.regressors.random_forest import RandomForestRegressorWrapper
 from .models.regressors.decesion_tree import DecisionTreeRegressorWrapper
-from .models.classifiers.random_forest import RandomForestClassifierModel
+from .models.classifiers.random_forest_classifier import RandomForestClassifierWrapper
 from .models.forecasters.linear_regression import LinearRegressionForecaster

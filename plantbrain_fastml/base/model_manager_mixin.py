@@ -170,6 +170,9 @@ class ModelManagerMixin:
         for name, eval_result in results_list:
             self.cv_results[name] = eval_result.get('cv_scores', {})
             self.test_results[name] = eval_result.get('test_scores', {})
+            tuned_params=eval_result.get('tuned_params')
+            if tuned_params:
+                self.models[name].set_params(**tuned_params)
 
             row = {'model': name}
             for metric, (mean, std) in eval_result.get('cv_scores', {}).items():
