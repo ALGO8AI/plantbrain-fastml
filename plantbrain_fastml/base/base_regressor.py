@@ -56,6 +56,7 @@ class BaseRegressor(ABC):
                  pca_n_components: Optional[int] = None,
                  hypertune: bool = False,
                  hypertune_params: Optional[Dict[str, Any]] = None,
+                 hypertune_metrics: str = 'rmse',
                  return_plots: bool = True,
                  random_state: int = 42
                  ) -> Dict[str, Any]:
@@ -96,6 +97,13 @@ class BaseRegressor(ABC):
 
         # Step 3: Optional hypertuning on training split
         if hypertune:
+
+            if hypertune_metrics not in metrics:
+                raise ValueError(f"Not a valid metric: {hypertune_metrics}")
+            if 'r2' in hypertune_metrics or 'neg' in hypertune_metrics:
+                direction= "maximize"
+            else:
+                direction= "minimize"
             def objective(trial: optuna.Trial) -> float:
                 trial_params = self.search_space(trial)
                 self.set_params(**trial_params)
@@ -107,14 +115,14 @@ class BaseRegressor(ABC):
                     y_cv_train, y_cv_val = y_train_proc.iloc[train_idx], y_train_proc.iloc[val_idx]
                     self.train(X_cv_train, y_cv_train)
                     y_pred_val = self.predict(X_cv_val)
-                    score = metrics.get('rmse', lambda yt, yp: 0)(y_cv_val, y_pred_val)  # default RMSE if available
+                    score = metrics[hypertune_metrics](y_cv_val, y_pred_val)  # default RMSE if available
                     cv_scores.append(score)
                 return np.mean(cv_scores)
 
             # Suppress Optuna logs for clean output
             optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-            study = optuna.create_study(direction='minimize')
+            study = optuna.create_study(direction=direction)
             study.optimize(objective, n_trials=hypertune_params.get('n_trials', 20),
                            timeout=hypertune_params.get('timeout', None))
             self.set_params(**study.best_params)
@@ -153,12 +161,13 @@ class BaseRegressor(ABC):
 
         self.cv_results = cv_scores_summary
         self.test_results = test_scores
-        
+        tuned_params= study.best_params if hypertune and 'study' in locals() else {}
 
         return {
             'cv_scores': cv_scores_summary,
             'test_scores': test_scores,
-            'plots': plots
+            'plots': plots,
+            'tuned_params':tuned_params
         }
 
     def _plot_line(self, y_true: pd.Series, y_pred: np.ndarray):

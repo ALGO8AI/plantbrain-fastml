@@ -1,19 +1,22 @@
+# plantbrain-fastml/plantbrain_fastml/models/classifiers/random_forest.py
+
 from sklearn.ensemble import RandomForestClassifier
-from plantbrain_fastml.base.base_classifier import BaseClassifier
+from ...base.base_classifier import BaseClassifier
 from optuna import Trial
 
-class RandomForestClassifierModel(BaseClassifier):
+class RandomForestClassifierWrapper(BaseClassifier):
     def __init__(self, **params):
         super().__init__(**params)
-        self.model = RandomForestClassifier(**params)
+        self.model = RandomForestClassifier(**params, random_state=42)
     
     def train(self, X, y):
-        X = self.preprocessor.fit_transform(X)
         self.model.fit(X, y)
     
     def predict(self, X):
-        X = self.preprocessor.transform(X)
         return self.model.predict(X)
+    
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)
     
     def search_space(self, trial: Trial):
         return {
