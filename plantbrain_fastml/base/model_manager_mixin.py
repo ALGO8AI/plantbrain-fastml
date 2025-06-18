@@ -6,7 +6,7 @@ import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 from plantbrain_fastml.utils.helpers import get_effective_n_jobs
-
+from abc import ABC, abstractmethod
 
 def _eval_single_model(name: str,
                        model,
@@ -48,7 +48,7 @@ def _eval_single_model(name: str,
     return name, eval_result
 
 
-class ModelManagerMixin:
+class ModelManagerMixin(ABC):
     """
     Manage multiple ML models with simple train_all and advanced evaluate_all.
 
@@ -72,6 +72,10 @@ class ModelManagerMixin:
         for name, model in self.models.items():
             model.train(X, y)
 
+    @abstractmethod
+    def get_hypertune_metrics(self):
+        pass
+
     def evaluate_all(self,
                      X,
                      y,
@@ -86,7 +90,7 @@ class ModelManagerMixin:
                      pca_n_components: Optional[int] = None,
                      hypertune: bool = False,
                      hypertune_params: Optional[Dict[str, Any]] = None,
-                     hypertune_metrics: str = "rmse",
+                     hypertune_metrics: Optional[str] = None,
                      return_plots: bool = True,
                      n_jobs: int = 1) -> pd.DataFrame:
         """
@@ -103,6 +107,8 @@ class ModelManagerMixin:
         """
 
         hypertune_params = hypertune_params or {}
+        if hypertune and hypertune_metrics is None:
+            hypertune_metrics=self.get_hypertune_metrics()
 
         # Suppress Optuna logs for clean output
         optuna.logging.set_verbosity(optuna.logging.WARNING)

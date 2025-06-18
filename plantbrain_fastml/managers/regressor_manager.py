@@ -29,4 +29,8 @@ class RegressorManager(ModelManagerMixin):
         self.add_model("adaboost", AdaBoost())
         self.add_model("lasso", Lasso())
         self.add_model("ridge", Ridge())
+    
+    def get_hypertune_metrics(self):
+        return "rmse"
+        
 

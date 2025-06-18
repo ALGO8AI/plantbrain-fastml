@@ -12,3 +12,6 @@ class ClassifierManager(ModelManagerMixin):
         self.add_model("random_forest", RandomForestClassifierWrapper())
         self.add_model("logistic_regression", LogisticRegressionWrapper())
         self.add_model("svc", SVCWrapper())
+
+    def get_hypertune_metrics(self):
+        return "roc_auc"
