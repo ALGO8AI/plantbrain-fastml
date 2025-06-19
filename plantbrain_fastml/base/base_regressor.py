@@ -94,6 +94,7 @@ class BaseRegressor(ABC):
             pca_n_components=pca_n_components)
 
         X_train_proc, y_train_proc = self.preprocessor.fit_transform(X_train, y_train)
+        tuned_params={}
 
         # Step 3: Optional hypertuning on training split
         if hypertune:
