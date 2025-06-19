@@ -20,6 +20,7 @@ class RandomForestClassifierWrapper(BaseClassifier):
     
     def search_space(self, trial: Trial):
         return {
+            "criterion": trial.suggest_categorical("criterion", ["gini", "entropy", "log_loss"]),
             "n_estimators": trial.suggest_int("n_estimators", 50, 300),
             "max_depth": trial.suggest_int("max_depth", 3, 20),
             "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),

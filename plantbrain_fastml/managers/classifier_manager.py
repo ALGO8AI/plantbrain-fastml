@@ -2,7 +2,7 @@
 
 from ..base.model_manager_mixin import ModelManagerMixin
 from ..models.classifiers.random_forest_classifier import RandomForestClassifierWrapper
-from ..models.classifiers.logistic_regression import LogisticRegressionWrapper
+from ..models.classifiers.logistic_regression import LogisticRegression
 from ..models.classifiers.svc import SVCWrapper
 
 class ClassifierManager(ModelManagerMixin):
@@ -10,7 +10,7 @@ class ClassifierManager(ModelManagerMixin):
         super().__init__()
         # Store the classes, not instances
         self.add_model("random_forest", RandomForestClassifierWrapper())
-        self.add_model("logistic_regression", LogisticRegressionWrapper())
+        self.add_model("logistic_regression", LogisticRegression())
         self.add_model("svc", SVCWrapper())
 
     def get_hypertune_metrics(self):
