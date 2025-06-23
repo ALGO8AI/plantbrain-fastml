@@ -16,8 +16,12 @@ classification_metrics = {
     "recall": recall_score,
     "f1": f1_score,
     "roc_auc":roc_auc_score,
-
 }
 
 # Forecasting metrics (reuse regression metrics)
-forecasting_metrics = regression_metrics
+forecasting_metrics = {
+    "rmse": lambda y_true, y_pred: np.sqrt(mean_squared_error(y_true, y_pred)),
+    "mape": lambda y_true, y_pred: np.mean(np.abs((y_true - y_pred) / y_true)) * 100,
+    "mae": mean_absolute_error,
+    "mse": lambda y_true, y_pred: np.mean((y_true - y_pred) ** 2),
+}
