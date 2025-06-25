@@ -72,6 +72,7 @@ class ModelManagerMixin:
         for name, model in self.models.items():
             model.train(X, y)
 
+
     def evaluate_all(self,
                      X,
                      y,
@@ -86,7 +87,7 @@ class ModelManagerMixin:
                      pca_n_components: Optional[int] = None,
                      hypertune: bool = False,
                      hypertune_params: Optional[Dict[str, Any]] = None,
-                     hypertune_metrics: str = "rmse",
+                     hypertune_metrics: str = "rmse", #self.hypertune_metrics
                      return_plots: bool = True,
                      n_jobs: int = 1) -> pd.DataFrame:
         """

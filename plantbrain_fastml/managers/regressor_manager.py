@@ -30,3 +30,4 @@ class RegressorManager(ModelManagerMixin):
         self.add_model("lasso", Lasso())
         self.add_model("ridge", Ridge())
 
+    
