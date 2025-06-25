@@ -1,5 +1,6 @@
+#############
 Usage Guide
-===========
+#############
 
 This guide provides examples of the two primary use cases for ``plantbrain-fastml``: regression and classification.
 

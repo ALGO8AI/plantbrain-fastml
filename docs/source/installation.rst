@@ -1,5 +1,6 @@
+############
 Installation
-============
+############
 
 This guide will walk you through installing the ``plantbrain-fastml`` library.
 
@@ -20,4 +21,4 @@ To get the latest development version, you can clone the repository and install 
    cd plantbrain-fastml
    pip install -e .
 
-This will install the package and allow you to make changes to the source code that will be immediately reflected in your environment.
+This will install the package and allow you to make changes to the source code that will be immediately reflected in your environment without needing to reinstall.
