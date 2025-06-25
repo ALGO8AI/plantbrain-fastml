@@ -94,6 +94,7 @@ class BaseRegressor(ABC):
             pca_n_components=pca_n_components)
 
         X_train_proc, y_train_proc = self.preprocessor.fit_transform(X_train, y_train)
+        tuned_params={}
 
         # Step 3: Optional hypertuning on training split
         if hypertune:
@@ -125,7 +126,9 @@ class BaseRegressor(ABC):
             study = optuna.create_study(direction=direction)
             study.optimize(objective, n_trials=hypertune_params.get('n_trials', 20),
                            timeout=hypertune_params.get('timeout', None))
-            self.set_params(**study.best_params)
+            final_params = self.search_space(study.best_trial)
+            self.set_params(**final_params)
+            tuned_params = final_params
 
         # Step 4: CV on training split with chosen params
         cv = KFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
@@ -161,7 +164,6 @@ class BaseRegressor(ABC):
 
         self.cv_results = cv_scores_summary
         self.test_results = test_scores
-        tuned_params= study.best_params if hypertune and 'study' in locals() else {}
 
         return {
             'cv_scores': cv_scores_summary,

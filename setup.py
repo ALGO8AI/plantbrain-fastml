@@ -1,12 +1,18 @@
 from setuptools import setup, find_packages
 
+def read_readme():
+    """Reads the README.md file with UTF-8 encoding."""
+    with open('README.md', 'r', encoding='utf-8') as f:
+        return f.read()
+
 setup(
     name="plantbrain-fastml",
     version="0.4.4",
     author="Himanshu Bhansali, Himanshu Ranjan",
     author_email="Himanshu.ranjan@algo8.ai, himanshu.bhansali@algo8.ai",
     description="An AutoML package by plantBrain with classification, regression, and forecasting support.",
-    long_description=open("README.md").read(),
+
+    long_description=read_readme(),
     long_description_content_type="text/markdown",
     url="https://github.com/ALGO8AI/plantbrain-fastml.git",
     project_urls={
