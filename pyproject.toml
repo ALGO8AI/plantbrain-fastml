@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plantbrain-fastml"
-version = "0.4.4"
+version = "0.4.5"
 authors = [
   { name = "Himanshu Bhansali", email = "himanshu.bhansali@algo8.ai" },
   { name = "Himanshu Ranjan", email = "Himanshu.ranjan@algo8.ai" }

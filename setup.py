@@ -7,7 +7,7 @@ def read_readme():
 
 setup(
     name="plantbrain-fastml",
-    version="0.4.4",
+    version="0.4.5",
     author="Himanshu Bhansali, Himanshu Ranjan",
     author_email="Himanshu.ranjan@algo8.ai, himanshu.bhansali@algo8.ai",
     description="An AutoML package by plantBrain with classification, regression, and forecasting support.",
